@@ -41,6 +41,9 @@ fabconf['APPS_DIR'] = "/home/%s/webapps" % fabconf['SERVER_USERNAME']
 # Where you want your project installed: /APPS_DIR/PROJECT_NAME
 fabconf['PROJECT_PATH'] = "%s/%s" % (fabconf['APPS_DIR'], fabconf['PROJECT_NAME'])
 
+# Change this if manage.py is not in PROJECT_PATH
+fabconf['MANAGEPY_PATH'] = fabconf['PROJECT_PATH']
+
 # App domains
 fabconf['DOMAINS'] = "example.com www.example.com"
 
