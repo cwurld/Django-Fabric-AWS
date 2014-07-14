@@ -46,6 +46,7 @@ Commands include:
         - Runs a python manage.py command on the server. To run this command we need to specify an argument, eg for
           syncdb type the command -> fab manage:command="syncdb --no-input"
 """
+import os
 
 from fabric.api import run, sudo, env, put, settings, cd
 from fabric.colors import green as _green, yellow as _yellow
@@ -53,6 +54,9 @@ from project_conf import fabconf, ec2_region, ec2_keypair, ec2_secgroups, ec2_in
 import boto
 import boto.ec2
 import time
+
+from gen_secret import gen_secret
+from write_secrets import write_secrets
 
 # AWS user credentials
 env.user = fabconf['SERVER_USERNAME']
@@ -93,7 +97,8 @@ def instance():
 
     # List of APT packages to install
     print(_yellow("Installing apt-get packages"))
-    _apt(["libpq-dev", "nginx", "memcached", "git", "python-setuptools", "python-dev", "build-essential", "python-pip"])
+    _apt(["libpq-dev", "nginx", "memcached", "git", "python-setuptools", "python-dev", "build-essential",
+          "python-pip", "libmemcached-dev"])
 
     # List of pypi packages to install
     print(_yellow("Installing pip packages"))
@@ -147,6 +152,12 @@ def instance():
     print(_yellow("Installing gunicorn"))
     _virtualenv("pip install gunicorn")
 
+    # Install django cache
+    _virtualenv("pip install pylibmc")
+    _virtualenv("pip install django-elasticache")
+    _virtualenv("pip install boto")
+    _virtualenv("pip install django-storages")
+
     # Clone the git repo
     run(_r("git clone %(BITBUCKET_REPO)s %(PROJECT_PATH)s"))
     put(_r("%(FAB_CONFIG_PATH)s/templates/gunicorn.conf.py"), _r("%(PROJECT_PATH)s/gunicorn.conf.py"))
@@ -160,8 +171,7 @@ def instance():
     sudo(_r("chmod +x %(PROJECT_PATH)s/start_gunicorn.bash"))
 
     # Install the requirements from the pip requirements files
-    _virtualenv("pip install -r %(PROJECT_PATH)s/requirements/common.txt --upgrade")
-    _virtualenv("pip install -r %(PROJECT_PATH)s/requirements/prod.txt --upgrade")
+    _virtualenv("pip install -r %(PROJECT_PATH)s/requirements/production.txt --upgrade")
 
     # nginx
     print(_yellow("Configuring nginx"))
@@ -176,12 +186,20 @@ def instance():
     sudo(_r("ln -s /etc/nginx/sites-available/%(PROJECT_NAME)s /etc/nginx/sites-enabled/%(PROJECT_NAME)s"))
     sudo(_r("chown root:root /etc/nginx/sites-available/%(PROJECT_NAME)s"))
 
+    # Setup secrets for Django
+    secret_key = gen_secret()
+    secrets = {'SECRET_KEY': secret_key}
+    temp_filename = write_secrets(secrets)
+    put(temp_filename, _r('%(SETTINGSDIR)s/secrets.json'))
+    os.remove(temp_filename)
+    print(_yellow("Writing secrets"))
+
     print(_yellow("Restarting nginx"))
     sudo("/etc/init.d/nginx restart")
 
     # Run collectstatic and syncdb
-    _virtualenv("python %(PROJECT_PATH)s/manage.py collectstatic -v 0 --noinput")
-    _virtualenv("python %(PROJECT_PATH)s/manage.py syncdb")
+    _virtualenv("python %(MANAGEPY_PATH)s/manage.py collectstatic -v 0 --noinput")
+    _virtualenv("python %(MANAGEPY_PATH)s/manage.py syncdb")
 
     # Setup supervisor
     print(_yellow("Configuring supervisor"))
@@ -219,8 +237,8 @@ def deploy():
     run(_r("cd %(PROJECT_PATH)s && git pull"))
 
     # Update the database
-    _virtualenv("python %(PROJECT_PATH)s/manage.py collectstatic -v 0 --noinput")
-    _virtualenv("python %(PROJECT_PATH)s/manage.py syncdb")
+    _virtualenv("python %(MANAGEPY_PATH)s/manage.py collectstatic -v 0 --noinput")
+    _virtualenv("python %(MANAGEPY_PATH)s/manage.py syncdb")
 
     # Restart gunicorn to update the site
     sudo(_r("supervisorctl restart %(PROJECT_NAME)s"))
@@ -336,7 +354,7 @@ def manage(command):
     env.hosts = fabconf['EC2_INSTANCES']
 
     # Run the management command inside the virtualenv
-    _virtualenv("python %(PROJECT_PATH)s/manage.py " + command)
+    _virtualenv("python %(MANAGEPY_PATH)s/manage.py " + command)
 
 
 # ------------------------------------------------------------------------------------------------------------------
@@ -434,9 +452,9 @@ def _render(template, context=fabconf):
 
 def _r(template):
     """
-    Does variable replacement. Using .format instead of % to be Python 3 compatible
+    Does variable replacement.
     """
-    return template.format(fabconf)
+    return template % fabconf
 
 
 def _write_to(string, the_path):

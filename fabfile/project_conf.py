@@ -15,7 +15,7 @@ in the comments to help.
 
 import os.path
 
-from my_project_conf import fabconf
+from my_project_conf import *
 
 #  Do not edit
 fabconf['FAB_CONFIG_PATH'] = os.path.dirname(__file__)
@@ -36,7 +36,9 @@ fabconf['APPS_DIR'] = "/home/%s/webapps" % fabconf['SERVER_USERNAME']
 fabconf['PROJECT_PATH'] = "%s/%s" % (fabconf['APPS_DIR'], fabconf['PROJECT_NAME'])
 
 # Change this if manage.py is not in PROJECT_PATH
-fabconf['MANAGEPY_PATH'] = fabconf['PROJECT_PATH']
+fabconf['MANAGEPY_PATH'] = '%s/%s' % (fabconf['PROJECT_PATH'], fabconf['PROJECT_NAME'])
+fabconf['SETTINGSDIR'] = '%s/%s/%s/settings' % \
+                         (fabconf['PROJECT_PATH'], fabconf['PROJECT_NAME'], fabconf['PROJECT_NAME'])
 
 # Path for virtualenvs
 fabconf['VIRTUALENV_DIR'] = "/home/%s/.virtualenvs" % fabconf['SERVER_USERNAME']
