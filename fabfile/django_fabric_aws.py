@@ -47,6 +47,8 @@ Commands include:
           syncdb type the command -> fab manage:command="syncdb --no-input"
 """
 import os
+import json
+import StringIO
 
 from fabric.api import run, sudo, env, put, settings, cd
 from fabric.colors import green as _green, yellow as _yellow
@@ -187,12 +189,7 @@ def instance():
     sudo(_r("chown root:root /etc/nginx/sites-available/%(PROJECT_NAME)s"))
 
     # Setup secrets for Django
-    secret_key = gen_secret()
-    secrets = {'SECRET_KEY': secret_key}
-    temp_filename = write_secrets(secrets)
-    put(temp_filename, _r('%(SETTINGSDIR)s/secrets.json'))
-    os.remove(temp_filename)
-    print(_yellow("Writing secrets"))
+    update_secrets(new_secret=True)
 
     print(_yellow("Restarting nginx"))
     sudo("/etc/init.d/nginx restart")
@@ -343,6 +340,28 @@ def reload_gunicorn():
 
     time_diff = time.time() - start
     print(_yellow("Finished reloading the gunicorn startup script in %.2fs" % time_diff))
+
+
+def update_secrets(new_secret=False):
+    secrets_file = open(fabconf['SECRETS_PATH'], 'rb')
+    new_secrets = json.load(secrets_file)
+    secrets_file.close()
+
+    if not new_secret:
+        # Keeps remote secret
+        remote_file_path = fabconf['SETTINGSDIR'] + '/secrets.json'
+        remote_file = StringIO.StringIO()
+        junk = get(remote_file_path, local_path=remote_file)
+        remote_secrets = json.loads(remote_file.getvalue())
+        remote_file.close()
+        new_secrets['SECRET_KEY'] = remote_secrets['SECRET_KEY']
+    else:
+        new_secrets['SECRET_KEY'] = gen_secret()
+
+    temp_filename = write_secrets(new_secrets)
+    put(temp_filename, _r('%(SETTINGSDIR)s/secrets.json'))
+    os.remove(temp_filename)
+    print(_yellow("Writing secrets"))
 
 
 def manage(command):

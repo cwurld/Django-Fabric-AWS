@@ -8,6 +8,7 @@ fabconf = {}
 
 # Project name
 fabconf['PROJECT_NAME'] = u'{{ project_name }}'  # Works as a Django startproject template
+fabconf['SECRETS_PATH'] = u''
 
 # Name of the private key file you use to connect to EC2 instances
 fabconf['EC2_KEY_NAME'] = "my_ssh_key.pem"
